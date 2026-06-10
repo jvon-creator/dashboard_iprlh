@@ -3,10 +3,12 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+import requests
+import io
 import os
 
 # ==============================================================================
-# 1. KONFIGURASI UTAMA & ENGINES FRONT-END STYLE (Executive Theme)
+# 1. KONFIGURASI UTAMA & TEORI WARNA UTAMA (Frontend Visual Identity)
 # ==============================================================================
 st.set_page_config(
     page_title="Dashboard BI Strategis IPRLH 2025",
@@ -15,12 +17,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Injeksi CSS Kustom untuk Mengoptimalkan Pengalaman Visual Tingkat Menteri (KLH)
+# Teori Warna: Kombinasi Deep Emerald, Slate Blue, dan Akseptasi Kontras Klaster KIE
 st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         
-        /* Reset Tipografi & Canvas Workspace */
         html, body, [data-testid="stSidebar"], .stApp {
             font-family: 'Inter', sans-serif;
             background-color: #f8fafc;
@@ -29,12 +30,12 @@ st.markdown("""
         
         /* Banner Utama Atas Dashboard (Z-Layout Header) */
         .header-banner {
-            background: linear-gradient(135deg, #1e3a8a, #0f172a);
+            background: linear-gradient(135deg, #064e3b, #0f172a);
             padding: 26px 24px;
             border-radius: 12px;
             color: white;
             margin-bottom: 24px;
-            border: 1px solid #1e293b;
+            border: 1px solid #14532d;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
         .header-banner h1 {
@@ -46,7 +47,7 @@ st.markdown("""
         }
         .header-banner p {
             font-size: 13px;
-            color: #94a3b8;
+            color: #a7f3d0;
             margin-top: 6px;
             font-weight: 500;
         }
@@ -55,7 +56,7 @@ st.markdown("""
         div[data-testid="stMetricValue"] {
             font-size: 34px;
             font-weight: 700;
-            color: #1e3a8a;
+            color: #064e3b;
             line-height: 1;
         }
         div[data-testid="stMetricLabel"] {
@@ -69,7 +70,7 @@ st.markdown("""
         
         /* Panel Kontrol Sidebar */
         [data-testid="stSidebar"] {
-            background-color: #0f172a;
+            background-color: #064e3b;
         }
         [data-testid="stSidebar"] * {
             color: #ffffff !important;
@@ -78,7 +79,7 @@ st.markdown("""
             font-size: 11px !important;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            color: #94a3b8 !important;
+            color: #a7f3d0 !important;
         }
         
         .block-container {
@@ -90,28 +91,28 @@ st.markdown("""
 
 
 # ==============================================================================
-# 2. DATA PIPELINE CONSUMER (ABS PATH EXCEL PARSER)
+# 2. DATA PIPELINE CONSUMER (GITHUB REMOTE EXCEL PARSER FOR STREAMLIT CLOUD)
 # ==============================================================================
 @st.cache_data
-def load_validated_data(file_path):
-    # Validasi keberadaan file di path absolut Windows sebelum diproses sistem
-    if not os.path.exists(file_path):
-        st.error(f"""
-            **Berkas Tidak Ditemukan!** Sistem gagal mendeteksi file pada jalur lokal komputer Anda:  
-            `{file_path}`  
-            
-            *Saran Perbaikan:*
-            1. Pastikan drive **C:** Anda dapat diakses dan tidak terkunci enkripsi sistem.
-            2. Periksa kembali penulisan nama folder `\\Work\\Pelatihan\\Data Analyst\\Project\\`.
-            3. Pastikan file hasil normalisasi data bersih `Data_IPRLH_2025_Cleaned.xlsx` sudah dipindahkan ke folder tersebut.
-        """)
-        st.stop()
-        
+def load_validated_data(url_path):
+    # Otomatis konversi link blob GitHub menjadi Raw Content Link jika mendeteksi link web interface
+    if "github.com" in url_path and "/blob/" in url_path:
+        url_raw = url_path.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+    else:
+        url_raw = url_path
+
     try:
-        # Membaca data sheet tabular provinsi bersih
-        df = pd.read_excel(file_path, sheet_name="Data_Clean_Provinsi")
+        # Mengunduh data biner dari GitHub secara daring
+        response = requests.get(url_raw, timeout=15)
+        response.raise_for_status()  # Validasi status HTTP 200 (Sukses)
+        
+        # Simpan stream biner ke buffer memori virtual
+        excel_buffer = io.BytesIO(response.content)
+        
+        # Membaca sheet target data bersih tingkat provinsi
+        df = pd.read_excel(excel_buffer, sheet_name="Data_Clean_Provinsi")
             
-        # Standardisasi nama kolom kementerian untuk keperluan visualisasi grafik internal
+        # Standardisasi nama kolom kementerian
         column_mapping = {
             'No': 'No', 'Provinsi': 'Provinsi', 'Pulau_Region': 'Pulau',
             'IPRLH': 'IPRLH', 'Knowledge': 'Knowledge', 'Attitude': 'Attitude',
@@ -121,12 +122,21 @@ def load_validated_data(file_path):
         }
         df = df.rename(columns=column_mapping)
         return df
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"""
+            **Koneksi Cloud ke GitHub Gagal!** Server Streamlit Cloud tidak dapat menarik berkas data.  
+            *Detail Kegagalan:* `{e}`
+            
+            *Catatan Validasi:* Pastikan Repositori GitHub Anda disetel ke **Public**. Jika repositori bersifat privat, server Cloud tidak diizinkan membaca file tanpa adanya kunci token akses khusus.
+        """)
+        st.stop()
     except Exception as e:
-        st.error(f"Sistem gagal mengonsumsi data tabular Excel. Pastikan nama sheet tidak diubah. Error: {e}")
+        st.error(f"Gagal memproses struktur tabel Excel dari GitHub. Pastikan lembar kerja `Data_Clean_Provinsi` tersedia. Error: {e}")
         st.stop()
 
-# Mengunci path absolut Windows menggunakan awalan 'r' (Raw String) untuk mematikan sifat escape character
-file_path_target = r"https://github.com/jvon-creator/dashboard_iprlh/blob/main/Data_IPRLH_2025_Cleaned.xlsx"
+# Menetapkan jalur URL repositori GitHub Anda
+file_path_target = "https://github.com/jvon-creator/dashboard_iprlh/blob/main/Data_IPRLH_2025_Cleaned.xlsx"
 df_dashboard = load_validated_data(file_path_target)
 
 
@@ -202,7 +212,6 @@ with col_left_chart:
     tab_scatter, tab_bottleneck = st.tabs(["🎯 Scatter Matriks Teori vs Aksi", "📈 Analisis Komponen Per Pulau"])
     
     with tab_scatter:
-        # Scatter Plot interaktif pemetaan relasi Teori vs Aksi Nyata
         fig_scatter = px.scatter(
             df_filtered, 
             x="Knowledge", 
@@ -212,16 +221,15 @@ with col_left_chart:
             hover_name="Provinsi",
             text="Provinsi",
             color_discrete_map={
-                'Cluster 1: Prioritas KIE Dasar': '#ef4444',       # Merah (KIE Dasar)
-                'Cluster 2: Tahu tetapi Belum Praktik': '#f59e0b',  # Kuning (Fasilitasi Fisik)
-                'Cluster 3: Role Model / Akselerasi': '#10b981'    # Hijau (Aman/Percontohan)
+                'Cluster 1: Prioritas KIE Dasar': '#ef4444',       
+                'Cluster 2: Tahu tetapi Belum Praktik': '#f59e0b',  
+                'Cluster 3: Role Model / Akselerasi': '#10b981'    
             },
             labels={"Knowledge": "Skor Pengetahuan (Knowledge)", "Practice": "Skor Tindakan Nyata (Practice)"},
             range_x=[0.40, 0.95],
             range_y=[0.35, 0.65]
         )
         
-        # Penambahan garis bantu diagonal keselarasan perilaku X=Y
         fig_scatter.add_trace(go.Scatter(
             x=[0.40, 0.70], y=[0.40, 0.70], 
             mode='lines', name='Kondisi Ideal (K=P)', 
@@ -238,7 +246,6 @@ with col_left_chart:
         st.plotly_chart(fig_scatter, use_container_width=True)
         
     with tab_bottleneck:
-        # Grouped Bar Chart komparasi capaian nilai komponen pembentuk indeks per pulau besar
         df_summary_pulau = df_dashboard.groupby('Pulau')[['Knowledge', 'Attitude', 'Practice']].mean().reset_index()
         fig_bar = px.bar(
             df_summary_pulau, 
@@ -246,7 +253,7 @@ with col_left_chart:
             y=["Knowledge", "Attitude", "Practice"],
             barmode="group",
             labels={"value": "Nilai Indeks", "variable": "Komponen"},
-            color_discrete_sequence=['#3b82f6', '#8b5cf6', '#f59e0b']
+            color_discrete_sequence=['#0284c7', '#8b5cf6', '#f59e0b']
         )
         fig_bar.update_layout(
             margin=dict(l=10, r=10, t=10, b=10),
@@ -261,7 +268,6 @@ with col_left_chart:
 with col_right_action:
     st.markdown("### 📋 Rekomendasi Program Taktis Pemilahan Sampah")
     
-    # Fungsi penentu kalimat instruksi kerja menteri dari klasifikasi data klaster
     def dapatkan_instruksi_taktis(nama_cluster):
         if nama_cluster == 'Cluster 1: Prioritas KIE Dasar':
             return "⚠️ **KIE LITERASI DASAR:** Kampanye tatap muka pengenalan klasifikasi sampah (Organik/Anorganik) langsung ke hulu rumah tangga."
@@ -273,7 +279,6 @@ with col_right_action:
     if not df_filtered.empty:
         st.write(f"Urutan Top {min(5, len(df_filtered))} Wilayah Prioritas Urgensi Kerja Lapangan:")
         
-        # Loop pencetakan visual card kustom untuk penargetan taktis pimpinan
         for idx, row in df_filtered.head(5).iterrows():
             warna_badge = "#ef4444" if row['Cluster'] == "Cluster 1: Prioritas KIE Dasar" else ("#d97706" if row['Cluster'] == "Cluster 2: Tahu tetapi Belum Praktik" else "#10b981")
             
@@ -281,7 +286,7 @@ with col_right_action:
             <div style="background-color: #ffffff; padding: 16px; border-radius: 8px; border-left: 6px solid {warna_badge}; margin-bottom: 14px; border-top: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <span style="font-weight: 700; font-size: 14px; color: #1e293b;">{row['Provinsi']} ({row['Pulau']})</span>
-                    <span style="font-weight: 700; color: #1e3a8a; font-size: 14px;">IPRLH: {row['IPRLH']:.2f}</span>
+                    <span style="font-weight: 700; color: #064e3b; font-size: 14px;">IPRLH: {row['IPRLH']:.2f}</span>
                 </div>
                 <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Nilai Kesenjangan Perilaku (Gap K-P): <b>{row['Gap_K_P']:.2f}</b></div>
                 <div style="font-size: 12px; margin-top: 10px; color: #334155; line-height: 1.4;">{dapatkan_instruksi_taktis(row['Cluster'])}</div>
