@@ -126,7 +126,7 @@ def load_validated_data(file_path):
         st.stop()
 
 # Mengunci path absolut Windows menggunakan awalan 'r' (Raw String) untuk mematikan sifat escape character
-file_path_target = r"C:\Work\Pelatihan\Data Analyst\Project\Data_IPRLH_2025_Cleaned.xlsx"
+file_path_target = r"https://github.com/jvon-creator/dashboard_iprlh/blob/main/Data_IPRLH_2025_Cleaned.xlsx"
 df_dashboard = load_validated_data(file_path_target)
 
 
